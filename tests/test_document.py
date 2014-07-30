@@ -6,6 +6,7 @@ from uuid import uuid4
 from datetime import datetime
 
 from preggy import expect
+from tornado.testing import gen_test
 
 from motorengine import (
     Document, StringField, BooleanField, ListField,
@@ -151,6 +152,21 @@ class TestDocument(AsyncTestCase):
         self.wait()
 
         Employee.objects.get(user._id, callback=self.stop)
+        retrieved_user = self.wait()
+
+        expect(retrieved_user._id).to_equal(user._id)
+        expect(retrieved_user.email).to_equal("heynemann@gmail.com")
+        expect(retrieved_user.first_name).to_equal("Bernardo")
+        expect(retrieved_user.last_name).to_equal("Heynemann")
+        expect(retrieved_user.emp_number).to_equal("Employee")
+        expect(retrieved_user.is_admin).to_be_true()
+
+    def test_can_get_instance_with_id_string(self):
+        user = Employee(email="heynemann@gmail.com", first_name="Bernardo", last_name="Heynemann", emp_number="Employee")
+        user.save(callback=self.stop)
+        self.wait()
+
+        Employee.objects.get(str(user._id), callback=self.stop)
         retrieved_user = self.wait()
 
         expect(retrieved_user._id).to_equal(user._id)
@@ -892,7 +908,7 @@ class TestDocument(AsyncTestCase):
         self.wait()
 
         msg = 'The index "test.UniqueFieldDocument.$name_1" was violated when trying to save this "UniqueFieldDocument" (error code: E11000).'
-        with expect.error_to_happen(UniqueKeyViolationError, message="msg"):
+        with expect.error_to_happen(UniqueKeyViolationError):
             UniqueFieldDocument.objects.create(name="test", callback=self.stop)
             self.wait()
 
@@ -1063,3 +1079,55 @@ class TestDocument(AsyncTestCase):
         items = self.wait()
 
         expect(items).to_length(1)
+
+    @gen_test
+    def test_list_field_with_reference_field(self):
+        class Ref(Document):
+            __collection__ = 'ref'
+            val = StringField()
+
+        class Base(Document):
+            __collection__ = 'base'
+            list_val = ListField(ReferenceField(reference_document_type=Ref))
+
+        yield Ref.objects.delete()
+        yield Base.objects.delete()
+
+        ref1 = yield Ref.objects.create(val="v1")
+        ref2 = yield Ref.objects.create(val="v2")
+        ref3 = yield Ref.objects.create(val="v3")
+
+        base = yield Base.objects.create(list_val=[ref1, ref2, ref3])
+
+        base = yield Base.objects.get(base._id)
+        expect(base).not_to_be_null()
+
+        yield base.load_references()
+        expect(base.list_val).to_length(3)
+        expect(base.list_val[0]).to_be_instance_of(Ref)
+
+    @gen_test
+    def test_list_field_with_reference_field_without_lazy(self):
+        class Ref(Document):
+            __collection__ = 'ref'
+            val = StringField()
+
+        class Base(Document):
+            __collection__ = 'base'
+            __lazy__ = False
+            list_val = ListField(ReferenceField(reference_document_type=Ref))
+
+        yield Ref.objects.delete()
+        yield Base.objects.delete()
+
+        ref1 = yield Ref.objects.create(val="v1")
+        ref2 = yield Ref.objects.create(val="v2")
+        ref3 = yield Ref.objects.create(val="v3")
+
+        base = yield Base.objects.create(list_val=[ref1, ref2, ref3])
+
+        base = yield Base.objects.get(base._id)
+        expect(base).not_to_be_null()
+
+        expect(base.list_val).to_length(3)
+        expect(base.list_val[0]).to_be_instance_of(Ref)

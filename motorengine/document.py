@@ -185,6 +185,9 @@ class BaseDocument(object):
         if results is None:
             results = []
 
+        if not isinstance(document, Document):
+            return results
+
         if fields:
             fields = [
                 (field_name, document._fields[field_name])
@@ -198,6 +201,7 @@ class BaseDocument(object):
             self.find_reference_field(document, results, field_name, field)
             self.find_list_field(document, results, field_name, field)
             self.find_embed_field(document, results, field_name, field)
+
         return results
 
     def find_reference_field(self, document, results, field_name, field):
