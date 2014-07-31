@@ -7,6 +7,7 @@ from tornado.concurrent import return_future
 from motorengine.metaclasses import DocumentMetaClass
 from motorengine.errors import InvalidDocumentError, LoadReferencesRequiredError
 
+from bson import objectid
 
 AUTHORIZED_FIELDS = ['_id', '_values']
 
@@ -170,6 +171,8 @@ class BaseDocument(object):
             return
 
         for dereference_function, document_id, values_collection, field in references:
+            # _id only valid for objectID or string type
+            if not isinstance(document_id, (objectid.ObjectId, six.string_types)) : continue
             dereference_function(
                 document_id,
                 callback=self.handle_load_reference(
